@@ -1,27 +1,21 @@
-import { type DefaultSession, type NextAuthConfig } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
-import { query } from "~/lib/db"; // Ensure this path matches where your db file is located
+import NextAuth, { DefaultSession } from "next-auth"
+import Google from "next-auth/providers/google"
+import { query } from "~/lib/db"
 
-/**
- * Module augmentation for `next-auth` types
- */
 declare module "next-auth" {
-  interface Session extends DefaultSession {
+  interface Session {
     user: {
       id: string;
     } & DefaultSession["user"];
   }
 }
 
-/**
- * NextAuth.js configuration
- */
-export const authConfig = {
+export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    GoogleProvider({
+    Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
+    })
   ],
   callbacks: {
     async signIn({ user, account }) {
@@ -29,9 +23,9 @@ export const authConfig = {
 
       try {
         const googleUid = account.providerAccountId;
-        const email = user.email
-        const pfp = user.image
-        const username = user.name
+        const email = user.email;
+        const pfp = user.image;
+        const username = user.name;
 
         // Check if user exists
         const existingUser = await query(
@@ -41,25 +35,23 @@ export const authConfig = {
 
         if (existingUser.length === 0) {
           // Insert new user
-          console.log("User does not exist, so inserting a new record with the data")
+          console.log("User does not exist, so inserting a new record with the data");
           await query(
             "INSERT INTO users (google_uid, created_at, email, username, profile_picture) VALUES ($1, NOW(), $2, $3, $4)",
             [googleUid, email, username, pfp]
           );
+        } else {
+          console.log("USER ALREADY EXISTS");
         }
-        else {
-          console.log("USER ALREADY EXISTS")
-        }
+
+        return true;
       } catch (error) {
         console.error("Database error:", error);
         return false;
       }
-
-      return true;
     },
 
-
-      async session({ session, token }) {
+    async session({ session, token }) {
       return {
         ...session,
         user: {
@@ -80,4 +72,4 @@ export const authConfig = {
     signIn: "/sign-in",
     error: "/auth/error",
   },
-} satisfies NextAuthConfig;
+})
