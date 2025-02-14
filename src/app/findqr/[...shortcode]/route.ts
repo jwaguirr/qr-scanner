@@ -13,14 +13,30 @@ type NewUserReturn = {
     create_new_user: string
 }
 
-export async function GET(request: NextRequest, { params }: { params: { shortcode: string } }) {
-    const session = await auth();
-    if (!session || !session.user.id) {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
+
+function extractOS(userAgent : string) {
+    if (!userAgent) return 'Unknown';
+    
+    const patterns = {
+      'Windows': /Windows/i,
+      'iOS': /(iPhone|iPad|iPod)/i,
+      'macOS': /Mac OS X/i,
+      'Android': /Android/i,
+      'Linux': /Linux/i,
+      'Unix': /Unix/i
+    };
+  
+    for (const [os, pattern] of Object.entries(patterns)) {
+      if (pattern.test(userAgent)) {
+        return os;
+      }
     }
+  
+    return 'Unknown';
+  }
+
+export async function GET(request: NextRequest, { params }: { params: { shortcode: string } }) {
+    // Use ip-api
 
     try {
         const { shortcode } = await params;
@@ -46,7 +62,6 @@ export async function GET(request: NextRequest, { params }: { params: { shortcod
         }
         const qr_uid = found_qr[0]?.qr_uid
         const embedded_link = found_qr[0]?.embedded_link
-        console.log("Found qr: ", found_qr)
         // We want to check and see if the user has a cookie stored, if not, he is justified as a new user
         const cookie_name = "ANON_ID"
         const cookieStore = await cookies(); // Add await here
@@ -54,7 +69,6 @@ export async function GET(request: NextRequest, { params }: { params: { shortcod
         let user_anon_id = null
         if (!existingCookie) {
             const anon_id: NewUserReturn[] = await query("SELECT create_new_user($1);", [qr_uid])
-            console.log("New user, anon_id: ", anon_id[0]?.create_new_user)
             const new_anon_id = anon_id[0]?.create_new_user
             
             if (new_anon_id) { 
@@ -69,7 +83,7 @@ export async function GET(request: NextRequest, { params }: { params: { shortcod
             }
         }
         else {
-            console.log("COOKIE EXISTS!")
+            // The cookie already exists
             user_anon_id = existingCookie.value
         }
         
@@ -78,11 +92,26 @@ export async function GET(request: NextRequest, { params }: { params: { shortcod
             const ip_address = request.headers.get("x-forwarded-for") ?? "0.0.0.0"; // Default IP
             const user_agent = request.headers.get("user-agent") ?? "Unknown";
             const referrer = request.headers.get("referer") ?? "None";
+            const os = extractOS(user_agent)
+            // Now we are going to query the ip lookup api and post these:
+            const api_res = await fetch(`http://ip-api.com/json/${ip_address}`, {
+                method: "GET"
+            })
+            let city = null
+            let state = null
+            let lat = null
+            let lon = null
+            const json = await api_res.json();
+            if (json.status === "success") {
+                city = json.city
+                state = json.regionName
+                lat = json.lat
+                lon = json.lon
+            }
             const result = await query(
-                "SELECT scan_qr_code($1::UUID, $2::UUID, $3::INET, $4::TEXT, $5::TEXT)", 
-                [anon_id, qr_uid, ip_address, user_agent, referrer]
+                "SELECT scan_qr_code($1::UUID, $2::UUID, $3::INET, $4::TEXT, $5::TEXT, $6::TEXT, $7::TEXT, $8::DECIMAL, $9::DECIMAL, $10::TEXT)", 
+                [anon_id, qr_uid, ip_address, user_agent, referrer, city, state, lat, lon, os]
             );
-            console.log("Scan result:", result);
             if (embedded_link) {
                 return NextResponse.redirect(embedded_link);
             }

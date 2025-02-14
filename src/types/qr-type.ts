@@ -9,7 +9,9 @@ export type QR = {
     created_by: string,
     created_at: DateTime,
     embedded_link: string,
-    short_url: string
+    short_url: string,
+    filepath: string,
+    short_code: string
 }
 
 export type QRResponse = {

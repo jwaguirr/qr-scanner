@@ -5,6 +5,10 @@
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
-const config = {};
+const config = {
+    env: {
+        NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    },
+};
 
 export default config;

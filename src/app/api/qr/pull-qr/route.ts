@@ -6,6 +6,7 @@ import { QR } from "~/types/qr-type";
 export async function GET() {
     // Making sure the session is still active
     const session = await auth();
+    console.log(session, process.env.NEXTAUTH_URL)
     if (!session || !session.user.id) {
         return NextResponse.json(
           { error: 'Unauthorized' },
