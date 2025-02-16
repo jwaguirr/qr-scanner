@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: { qr_uid: stri
         { status: 401 }
     );
     }
-    const { qr_uid } = params;
+    const { qr_uid } = await params;
     if (!qr_uid) return NextResponse.json({ error: "QR UID is required" }, { status: 400 });
 
     // Construct file path based on QR UID (following /da/f4 structure)

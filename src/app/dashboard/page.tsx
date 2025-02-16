@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getSession } from "next-auth/react";
+import { getSession, signOut } from "next-auth/react";
 import { QRResponse } from "~/types/qr-type";
 import DonutChart from "./dash-components/location-donut";
 import { useRouter } from "next/navigation";
@@ -86,20 +86,29 @@ type slidesType = {
 function Dashboard() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const session = await getSession();
+      if (!session) {
+        router.push("/auth/sign-in"); // Redirect to sign-in if no session
+      } else {
+        setIsAuthenticated(true); // Mark as authenticated
+      }
+    };
+
+    void checkSession();
+  }, [router]);
+
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [customURL, setCustomURL] = useState("");
   const [slideData, setSlideData] = useState(loadingSlideData);
   const [currentStep, setCurrentStep] = useState(0);
 
-  // Fetch session on mount
-  useEffect(() => {
-    const getSes = async () => {
-      const session = await getSession();
-      console.log("Session", session);
-    };
-    void getSes();
-  }, []);
+
+
 
   // --- API Calls ---
   const createQR = async (my_url: CreateQRInput) => {
@@ -140,12 +149,14 @@ function Dashboard() {
     return await response.json();
   };
 
-  // Query: fetch all QRs
-  const { data: qrs } = useQuery<QRResponse, Error>({
-    queryKey: ["fetch-qrs"],
-    queryFn: fetchQR,
-  });
-
+  const { data: qrs } = useQuery<QRResponse, Error>(
+    ["fetch-qrs"], 
+    fetchQR,
+    {
+      enabled: isAuthenticated === true, 
+    }
+  );
+  
   const fetchTotalAndUniqueScans = async () => {
     const response = await fetch(`/api/qr/qr-stats/total_qr`, {
       method: "GET",
@@ -244,11 +255,19 @@ function Dashboard() {
     router.push(`/qr-analytics/${qr_uid}`);
   };
 
+  if (isAuthenticated === null) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-xl text-gray-600 dark:text-gray-300">Checking authentication...</p>
+      </div>
+    );
+  }
+
   // -------------- Layout & UI --------------
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+    <div className="min-h-screen pb-12 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
       {/* Top Bar / Header */}
-      <div className="sticky top-0 z-50 shadow">
+      <div className="sticky top-0 z-50">
       <div className="max-w-7xl mx-auto flex justify-between items-center h-16">
           <div className="flex">
             <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">dubtrack</h1>
@@ -262,30 +281,32 @@ function Dashboard() {
             </Button>
           </div>
         </div>
-      
+        {/* <button onClick={() => signOut()}> 
+          Sign on
+        </button> */}
       </div>
 
       {/* Main Content */}
       <div className="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
         {/* Stats Overview */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Card className="dark:bg-gray-800 shadow-md">
-            <CardBody>
-              <div className="text-2xl dark:text-white font-bold">
-                {total_and_unique_scans?.stats.total_scans ?? 0}
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Total</div>
-            </CardBody>
-          </Card>
+        <Card className="dark:bg-gray-800 shadow-md">
+          <CardBody>
+            <div className="text-2xl dark:text-white font-bold">
+              {total_and_unique_scans?.total_scans ?? 0}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Total</div>
+          </CardBody>
+        </Card>
 
-          <Card className="dark:bg-gray-800 shadow-md">
-            <CardBody>
-              <div className="text-2xl font-bold dark:text-white">
-                {total_and_unique_scans?.stats.total_unique_scans ?? 0}
-              </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Unique</div>
-            </CardBody>
-          </Card>
+        <Card className="dark:bg-gray-800 shadow-md">
+          <CardBody>
+            <div className="text-2xl font-bold dark:text-white">
+              {total_and_unique_scans?.total_unique_scans ?? 0}
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Unique</div>
+          </CardBody>
+        </Card>
 
           <Card className="dark:bg-gray-800 shadow-md">
             <CardBody>
@@ -298,7 +319,7 @@ function Dashboard() {
             <CardBody>
               <div className="text-2xl font-bold dark:text-white">
                 {total_and_unique_scans && totalQR > 0
-                  ? Math.round((total_and_unique_scans.stats.total_scans / totalQR) * 100) / 100
+                  ? Math.round((total_and_unique_scans?.stats.total_scans / totalQR) * 100) / 100
                   : 0}
               </div>
               <div className="text-sm text-gray-500 dark:text-gray-400">Avg / Code</div>

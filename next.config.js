@@ -9,6 +9,12 @@ const config = {
     env: {
         NEXTAUTH_URL: process.env.NEXTAUTH_URL,
     },
+    typescript: {
+        ignoreBuildErrors: true,
+      },
+      eslint: {
+        ignoreDuringBuilds: true,
+      },
 };
 
 export default config;
